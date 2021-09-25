@@ -7,9 +7,9 @@ This program generates a tax record of cryptocurrency transactions from Coinbase
 - Install requirements: `pip install -r requirements.txt`
 - This program requires Coinbase Pro API keys. See https://help.coinbase.com/en/pro/other-topics/api/how-do-i-create-an-api-key-for-coinbase-pro for how to create API keys (requires a Coinbase Pro account) and https://docs.pro.coinbase.com/ for API documentation.
 - Create a `.env` file, which will save your API keys as environment variables read by the program, containing:
-  > coinbase_key = "your_key"
-  > coinbase_b64secret = "your_b64secret"
-  > coinbase_passphrase = "your_passphrase"
+  > coinbase_key = "your_key"  
+  > coinbase_b64secret = "your_b64secret"  
+  > coinbase_passphrase = "your_passphrase"  
 - Run `exampletaxes.py` to generate a list of transactions from a provided list of fills downloaded from Coinbase Pro.
 
 ## Cryptotax notes

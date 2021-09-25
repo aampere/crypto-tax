@@ -2,13 +2,21 @@ import bisect
 import csv
 import time
 import datetime
-import coinutil as cu
+import os
+
+import dotenv
 import cbpro
 
-#replace with Coinbase pro API keys and passphrase
-key = ''
-b64secret = ''
-passphrase = ''
+import coinutil as cu
+
+#load environment variables containing my Coinbase API keys
+dotenv.load_dotenv()
+
+#Set Coinbase API keys from environment
+key = os.getenv("coinbase_key")
+b64secret = os.getenv("coinbase_b64secret")
+passphrase = os.getenv("coinbase_passphrase")
+print(b64secret)
 
 #Create cbpro objects to make API calls to coinbase
 public_client = cbpro.PublicClient()
@@ -22,7 +30,7 @@ mi = cu.MarketInfo(public_client,auth_client)
 #Coinbase pro provides users with a complete record of their trading activity.
 #A "fill" means an order submitted to Coinbase was executed, or "filled". See word document for more.
 #So this is a list of all filled orders.
-fillspath = 'cryptotax/fills_2020_github.csv'
+fillspath = 'example_fills_data/fills_2019.csv'
 
 #A "holding" is a quantity of a cryptocurrency, its value in USD at time of acquisition ("basis") and date/time acquired.
 #holdings is a dict that maps currency names to a list of holdings.
@@ -41,12 +49,14 @@ transactions = []
 #We will run through the fills and add to or pull from holdings, pulling from the OLDEST holding available (FIFO)
 #Transactions are created each time a fill is a disposal of crypto, and the transaction list is what the IRS wants ultimately.
 
-#Creates an incomplete history of prices for each currency we've traded in the past.
-#This is needed because for crypto-to-crypto trades (eg, trading Bitcoin for Ethereum),
-#that is still considered a disposal of assets, and capital gain/loss must be assessed
-#based on the "current fair market value" of the procured currency. We could query the API for that
-#historical price point, which is request-limited, or we could look for a price from our fills doc from a close-by time.
 def readFillsForPrices(fp):
+    '''
+    Creates an incomplete history of prices for each currency we've traded in the past.
+    This is needed because for crypto-to-crypto trades (eg, trading Bitcoin for Ethereum),
+    that is still considered a disposal of assets, and capital gain/loss must be assessed
+    based on the "current fair market value" of the procured currency. We could query the API for that
+    historical price point, which is request-limited, or we could look for a price from our fills doc from a close-by time.
+    '''
     pricelogs = {} # dict with basecurrency pointing to ordered pairs of (timestamp,price) where price is price in USD
     #the csv is already ordered by time
     with open(fp, newline='') as fillscsv:
@@ -60,11 +70,12 @@ def readFillsForPrices(fp):
             pricelogs[curr].append((float(row['timestamp']),float(row['price'])))
     return pricelogs
 
-#The primary work of this program.
-#Loop through the fills and add to or pull from holdings;
-#Generate transactions whenever a crypto asset is disposed of.
-#The 'BUY' and 'SELL' side terminology is Coinbase's, and extremely important to keep straight.
 def readFillsForGains(mi,fp,pricelogs):
+    '''
+    Loop through the fills and add to or pull from holdings.
+    Generate transactions whenever a crypto asset is disposed of.
+    The 'BUY' and 'SELL' side terminology is Coinbase's, and extremely important to keep straight.
+    '''
     with open(fillspath, newline='') as fillscsv:
         fillsreader = csv.DictReader(fillscsv, delimiter=',')
         i=0
@@ -162,17 +173,23 @@ def readFillsForGains(mi,fp,pricelogs):
             i=i+1
 
 def addToHoldings(curr, size, usdbasis, yyyy, mm, dd):
-    #curr: currency being held
-    #size: size (amount) of currency being held
-    #usdbasis: how much USD it took to get this size of currency
+    '''
+    Adds to the holdings of a currency, and records the date aqcquired.
+    curr: currency being held
+    size: size (amount) of currency being held
+    usdbasis: how much USD it took to get this size of currency
+    '''
     if not curr in holdings:
         holdings[curr] = [] #if there is no list of holdings yet for this currency, create it.
     holdings[curr].append({'size':size, 'usdbasis':usdbasis, 'yyyy':yyyy, 'mm':mm, 'dd':dd})
     
 def pullFromHoldings(curr, amt):
-    #This returns a list of holdings for the curr.
-    #each holding has {'size':size, 'usdbasis':usdbasis, 'yyyy':yyyy, 'mm':mm, 'dd':dd}
-    #amt is coming in as a float
+    '''
+    Removes a specified amount of a currency from the holdings, one holding at a time, until the full amount has been removed.
+    Returns a list of holdings pulled.
+    Each holding has {'size':size, 'usdbasis':usdbasis, 'yyyy':yyyy, 'mm':mm, 'dd':dd}
+    amt is coming in as a float
+    '''
     global holdings
     pulledholdinglist = [] #this will be returned. its a list of holdings whose size add up to the amt
     holding = holdings[curr] #list of holdings in the currency. earliest acquired is index 0.
@@ -201,10 +218,13 @@ def pullFromHoldings(curr, amt):
                 break
     return pulledholdinglist
     
-#Binary search of the historical price data generated from our fills doc.
-#If an entry is not found within 30 seconds of the queried time, get the historic price form the API
+
 def closestPrice(mi, curr, pricelog, timestamp):
-    #pricelog is list of ordered pairs of (timestamp,price) where price is in USD
+    '''
+    Binary search of the historical price data generated from our fills doc.
+    If an entry is not found within 30 seconds of the queried time, get the historic price form the API
+    pricelog is list of ordered pairs of (timestamp,price) where price is in USD
+    '''
     if len(pricelog)==0:
         print("NO PRICE AVAILABLE")
         return getHistoricPrice(mi, curr, timestamp)
@@ -225,20 +245,22 @@ def closestPrice(mi, curr, pricelog, timestamp):
         time.sleep(1.01) #Avoid too many requests.
         return getHistoricPrice(mi, curr, timestamp)
 
-#Obtains historical price for a currency. Used only in case our fills document did not already provide a close-enough price.
-#Searches first for exact candle (within 1 minute), then requests larger candles if smaller candles are unavailable.
-#(A "candle" is the opening, closing, high, and low prices for a currency within a time period)
+
 def getHistoricPrice(mi, curr, timestamp):
-    #Statement from CB Pro provides ISO 8601 string for date/time
-    #In excel, I convert that to POSIX timestamp, ie seconds since jan 1 1970. 
-    #utcfromtimestamp() creates a datetime object from timestamp.
-    #isoformat() converts it back to the ISO 8601 format.
-    #When I take the statement ISO timestamp, use excel to calculate epocseconds, then use isoformat on that number, i get the original ISO string back again, meaning everything is on the correct standard.
-    #Coinbase's auth_client_get_product_historic_rates takes ISO strings as start/end parameters, but returns time in timestamp. Eyeroll.
-    #The returned candle is  [bucketstarttime, low, high, open, close, volume]
+    '''
+    Obtains historical price for a currency. Used only in case our fills document did not already provide a close-enough price.
+    Searches first for exact candle (within 1 minute), then requests larger candles if smaller candles are unavailable.
+    (A "candle" is the opening, closing, high, and low prices for a currency within a time period.)
     
+    Statement from CB Pro provides ISO 8601 string for date/time
+    In excel, I convert that to POSIX timestamp, ie seconds since jan 1 1970. 
+    utcfromtimestamp() creates a datetime object from timestamp.
+    isoformat() converts it back to the ISO 8601 format.
+    When I take the statement ISO timestamp, use excel to calculate timestamp, then use isoformat on that number, I get the original ISO string back again, meaning everything is on the correct standard.
+    Coinbase's auth_client_get_product_historic_rates takes ISO strings as start/end parameters, but returns time in timestamp format. Eyeroll.
+    The returned candle is  [bucketstarttime, low, high, open, close, volume]
+    '''
     print('Attempting to find historical USD price for {0} at {1}'.format(curr, timestamp))
-    
     #this attempts to capture the exact candle of size 60s that contains the time requested
     info = mi.auth_client.get_product_historic_rates(curr+'-USD',start=datetime.datetime.utcfromtimestamp(timestamp-60).isoformat(),end=datetime.datetime.utcfromtimestamp(timestamp).isoformat(), granularity=60)
     if type(info)==list:
@@ -302,8 +324,8 @@ def sumHoldings(holding):
         totalsize += h['size']
     return totalsize
 
-#Write transactions to csv in a way that can easily be transferred to IRS form 8949
 def writeTransactions(trans, path):
+    #Write transactions to csv in a way that can easily be transferred to IRS form 8949
     with open(path, 'w', newline='') as f:
         fieldnames = ['description', 'dateacquired', 'datesold', 'proceeds', 'cost', 'gain']
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')

@@ -1,0 +1,11 @@
+#Virtual environment
+/crypto-tax-venv
+
+#Environment vars
+.env
+
+#Output file
+transactions.csv
+
+#Created by API calls
+/__pycache__

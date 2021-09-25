@@ -1,9 +1,16 @@
 # Cryptotax
 The IRS considers cryptocurrencies such as Bitcoin to be property, and thus subject to capital gains taxes when bought, sold, or exchanged for other property. Cryptocurrency marketplaces generally supply a history of a user's orders, but they do not calculate gains/losses in the method required by the IRS.  
 This program generates a tax record of cryptocurrency transactions from Coinbase Pro in the IRS-required format. Particularly useful for collating many transactions.  
-Below are my notes for understanding crypto taxes, and my process for preparing my tax documents in the format required by the IRS.
 
-<sub>It may be interesting to note that there is probably almost a 0% chance that you will be caught for non-compliance if you don't report your cryptocurrency gains under a certain threshold. However, if you are losing money on cryptocurrency, perhaps by screwing around with automated cryptocurrency trading, you can claim those losses by documenting them correctly 😉</sub>
+## Setup
+- Create and activate virtual environment `cryptotax-venv`.
+- Install requirements: `pip install -r requirements.txt`
+- This program requires Coinbase Pro API keys. See https://help.coinbase.com/en/pro/other-topics/api/how-do-i-create-an-api-key-for-coinbase-pro for how to create API keys (requires a Coinbase Pro account) and https://docs.pro.coinbase.com/ for API documentation.
+- Create a `.env` file, which will save your API keys as environment variables read by the program, containing:
+  > coinbase_key = "your_key"
+  > coinbase_b64secret = "your_b64secret"
+  > coinbase_passphrase = "your_passphrase"
+- Run `exampletaxes.py` to generate a list of transactions from a provided list of fills downloaded from Coinbase Pro.
 
 ## Cryptotax notes
 Aaron Price  

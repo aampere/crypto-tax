@@ -1,5 +1,5 @@
 # Cryptotax
-The IRS considers cryptocurrencies such as Bitcoin to be property, and thus subject to capital gains taxes when bought, sold, or exchanged for other property. Cryptocurrency marketplaces generally supply a history of a user's orders, but they do not calculate gains/losses in the method required by the IRS.  
+The IRS considers cryptocurrencies such as Bitcoin to be property, and thus subject to capital gains taxes when sold or exchanged for other property. Cryptocurrency marketplaces generally supply a history of a user's filled orders, but they do not calculate gains/losses in the manor required by the IRS.  
 This program generates a tax record of cryptocurrency transactions from Coinbase Pro in the IRS-required format. Particularly useful for collating many transactions.  
 
 ## Setup
